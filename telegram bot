@@ -1,0 +1,64 @@
+import telebot
+import requests
+import time
+import threading
+
+# ضع التوكن الخاص بك هنا
+API_TOKEN = '8620574210:AAH4cpVvF8k5MlO9Nz5qmrUmbDOmImWMoak'
+bot = telebot.TeleBot(API_TOKEN)
+
+subscriptions = {}
+
+def get_content():
+    # التبديل عشوائياً بين آية وحديث
+    try:
+        if time.time() % 2 == 0:
+            res = requests.get("https://vercel.app").json()
+            return f"📖 {res['data']['text']}\n\nسورة {res['data']['surah']['name']}"
+        else:
+            res = requests.get("https://herokuapp.com").json()
+            return f"💬 قال ﷺ: {res['hadithArabic']}\n\nالمصدر: {res['bookArabic']}"
+    except:
+        return "سُبْحَانَ اللَّهِ وَبِحَمْدِهِ، سُبْحَانَ اللَّهِ الْعَظِيمِ"
+
+def auto_sender():
+    last_run = {}
+    while True:
+        now = time.time()
+        for chat_id, mins in list(subscriptions.items()):
+            if chat_id not in last_run or (now - last_run[chat_id]) >= mins * 60:
+                try:
+                    bot.send_message(chat_id, get_content())
+                    last_run[chat_id] = now
+                except: pass
+        time.sleep(10)
+
+@bot.message_handler(commands=['startquran'])
+def start(m):
+    subscriptions[m.chat.id] = 5
+    bot.reply_to(m, "🌙 مرحباً بك! سأرسل آية أو حديث كل 5 دقائق.")
+
+@bot.message_handler(commands=['schedule'])
+def schedule(m):
+    try:
+        mins = int(m.text.split()[1])
+        subscriptions[m.chat.id] = mins
+        bot.reply_to(m, f"⏱️ تم الضبط كل {mins} دقيقة.")
+    except: bot.reply_to(m, "مثال: /schedule 10")
+
+@bot.message_handler(commands=['stopquran'])
+def stop(m):
+    subscriptions.pop(m.chat.id, None)
+    bot.reply_to(m, "🛑 تم الإيقاف.")
+
+@bot.message_handler(commands=['setchannel'])
+def set_channel(m):
+    try:
+        parts = m.text.split()
+        ch_id, mins = parts[1], int(parts[2])
+        subscriptions[ch_id] = mins
+        bot.reply_to(m, f"📢 تم التفعيل للقناة {ch_id}")
+    except: bot.reply_to(m, "مثال: /setchannel @mychannel 30")
+
+threading.Thread(target=auto_sender, daemon=True).start()
+bot.infinity_polling()
