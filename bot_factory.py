@@ -2,22 +2,39 @@
 """
 Bot Factory - AI-Powered Bot Generator
 Creates custom bots on demand using Claude AI
+Deployed on Railway
 """
 
 import os
 import json
 import asyncio
+import logging
 from typing import Optional
 from dotenv import load_dotenv
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes, ConversationHandler
+from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes, ConversationHandler, CallbackQueryHandler
 import anthropic
 
 load_dotenv()
 
+# Setup logging
+logging.basicConfig(
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    level=logging.INFO
+)
+logger = logging.getLogger(__name__)
+
 # Environment variables
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
+
+if not TELEGRAM_TOKEN or not ANTHROPIC_API_KEY:
+    raise ValueError(
+        "Missing required environment variables!\n"
+        "Please set TELEGRAM_BOT_TOKEN and ANTHROPIC_API_KEY"
+    )
+
+logger.info("✅ Configuration loaded successfully")
 
 # Conversation states
 ASKING_BOT_TYPE = 1
@@ -30,11 +47,14 @@ class BotFactory:
         self.client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
         self.bot_configs = {}
         self.generated_bots = {}
+        logger.info("🏭 BotFactory initialized")
         
     async def generate_bot_code(self, bot_type: str, features: str, customization: str, user_id: int) -> dict:
         """
         Uses Claude AI to generate complete bot code
         """
+        logger.info(f"Generating {bot_type} bot for user {user_id}")
+        
         prompt = f"""
 You are an expert Python Telegram bot developer. Generate a complete, production-ready Telegram bot.
 
@@ -64,28 +84,36 @@ Make the code:
 Ensure the JSON is valid and the code is complete.
         """
         
-        response = self.client.messages.create(
-            model="claude-3-5-sonnet-20241022",
-            max_tokens=4000,
-            messages=[
-                {"role": "user", "content": prompt}
-            ]
-        )
-        
-        response_text = response.content[0].text
-        
-        # Extract JSON from response
         try:
+            response = self.client.messages.create(
+                model="claude-3-5-sonnet-20241022",
+                max_tokens=4000,
+                messages=[
+                    {"role": "user", "content": prompt}
+                ]
+            )
+            
+            response_text = response.content[0].text
+            
+            # Extract JSON from response
             json_start = response_text.find("{")
             json_end = response_text.rfind("}") + 1
             json_str = response_text[json_start:json_end]
             bot_config = json.loads(json_str)
             bot_config['user_id'] = user_id
+            
+            logger.info(f"✅ Bot code generated successfully: {bot_config.get('bot_name')}")
             return bot_config
-        except json.JSONDecodeError:
+        except json.JSONDecodeError as e:
+            logger.error(f"JSON parse error: {e}")
             return {
                 "error": "Failed to parse AI response",
-                "raw_response": response_text
+                "raw_response": response_text[:500]
+            }
+        except Exception as e:
+            logger.error(f"Generation error: {e}")
+            return {
+                "error": str(e)
             }
     
     async def create_bot_files(self, bot_config: dict, user_id: int) -> str:
@@ -95,28 +123,33 @@ Ensure the JSON is valid and the code is complete.
         bot_name = bot_config.get('bot_name', 'custom_bot').replace(' ', '_').lower()
         bot_dir = f"generated_bots/{user_id}/{bot_name}"
         
-        os.makedirs(bot_dir, exist_ok=True)
-        
-        # Save main bot code
-        with open(f"{bot_dir}/bot.py", "w") as f:
-            f.write(bot_config.get('main_code', ''))
-        
-        # Save requirements
-        with open(f"{bot_dir}/requirements.txt", "w") as f:
-            f.write(bot_config.get('requirements', 'python-telegram-bot\nrequests\npython-dotenv'))
-        
-        # Save setup instructions
-        with open(f"{bot_dir}/SETUP.md", "w") as f:
-            f.write(f"# {bot_config.get('bot_name', 'Custom Bot')} Setup\n\n")
-            f.write(bot_config.get('setup_instructions', ''))
-            f.write("\n\n## Commands\n")
-            f.write(bot_config.get('commands', ''))
-        
-        # Save config
-        with open(f"{bot_dir}/config.json", "w") as f:
-            json.dump(bot_config, f, indent=2)
-        
-        return bot_dir
+        try:
+            os.makedirs(bot_dir, exist_ok=True)
+            
+            # Save main bot code
+            with open(f"{bot_dir}/bot.py", "w") as f:
+                f.write(bot_config.get('main_code', ''))
+            
+            # Save requirements
+            with open(f"{bot_dir}/requirements.txt", "w") as f:
+                f.write(bot_config.get('requirements', 'python-telegram-bot\nrequests\npython-dotenv'))
+            
+            # Save setup instructions
+            with open(f"{bot_dir}/SETUP.md", "w") as f:
+                f.write(f"# {bot_config.get('bot_name', 'Custom Bot')} Setup\n\n")
+                f.write(bot_config.get('setup_instructions', ''))
+                f.write("\n\n## Commands\n")
+                f.write(bot_config.get('commands', ''))
+            
+            # Save config
+            with open(f"{bot_dir}/config.json", "w") as f:
+                json.dump(bot_config, f, indent=2)
+            
+            logger.info(f"Bot files created at: {bot_dir}")
+            return bot_dir
+        except Exception as e:
+            logger.error(f"File creation error: {e}")
+            return ""
 
 
 bot_factory = BotFactory()
@@ -124,6 +157,8 @@ bot_factory = BotFactory()
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Start the bot creation process"""
+    logger.info(f"User {update.effective_user.id} started bot creation")
+    
     keyboard = [
         [InlineKeyboardButton("🎮 Gaming Bot", callback_data="type_gaming")],
         [InlineKeyboardButton("📚 Educational Bot", callback_data="type_education")],
@@ -153,6 +188,8 @@ async def handle_bot_type(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     bot_type = query.data.replace("type_", "").title()
     context.user_data['bot_type'] = bot_type
     
+    logger.info(f"User {update.effective_user.id} selected: {bot_type}")
+    
     await query.edit_message_text(
         text=f"✅ You selected: {bot_type} Bot\n\n"
              f"Now, what specific features do you want? (e.g., 'chat, image processing, user profiles')"
@@ -165,6 +202,8 @@ async def handle_features(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     """Get desired features"""
     context.user_data['features'] = update.message.text
     
+    logger.info(f"User {update.effective_user.id} features: {update.message.text[:100]}")
+    
     await update.message.reply_text(
         "Great! Any specific customizations or requirements?\n"
         "(e.g., 'multilingual, fast response, database integration') or just type 'none'"
@@ -176,6 +215,8 @@ async def handle_features(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 async def handle_customization(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Get customization requirements and generate bot"""
     context.user_data['customization'] = update.message.text
+    
+    logger.info(f"User {update.effective_user.id} customization: {update.message.text[:100]}")
     
     # Show generating message
     generating_msg = await update.message.reply_text(
@@ -194,31 +235,34 @@ async def handle_customization(update: Update, context: ContextTypes.DEFAULT_TYP
         
         if 'error' in bot_config:
             await generating_msg.edit_text(
-                f"��� Error: {bot_config['error']}\n\nRaw response:\n{bot_config.get('raw_response', 'Unknown error')[:500]}"
+                f"❌ Error: {bot_config['error']}\n\nPlease try again."
             )
             return ConversationHandler.END
         
         # Create bot files
         bot_dir = await bot_factory.create_bot_files(bot_config, update.effective_user.id)
         
+        if not bot_dir:
+            await generating_msg.edit_text("❌ Failed to create bot files.")
+            return ConversationHandler.END
+        
         # Prepare response
         response = (
             f"✅ Bot Created Successfully!\n\n"
             f"📝 Bot Name: {bot_config.get('bot_name', 'Custom Bot')}\n"
             f"📄 Description: {bot_config.get('description', 'N/A')[:100]}\n\n"
-            f"📦 Features Implemented:\n"
+            f"🎯 Features Implemented:\n"
         )
         
         features_list = bot_config.get('features_implemented', 'N/A')
         if isinstance(features_list, str):
-            response += features_list
+            response += features_list[:500]
         else:
             response += "\n".join(f"  • {f}" for f in features_list[:10])
         
         response += f"\n\n🛠️ Setup Instructions:\n{bot_config.get('setup_instructions', 'N/A')[:300]}...\n\n"
-        response += f"📍 Bot files saved to: `{bot_dir}`\n"
-        response += "\nTo get your bot running:\n"
-        response += "```\ncd " + bot_dir + "\npip install -r requirements.txt\npython bot.py\n```"
+        response += f"📂 Bot files saved!\n"
+        response += "\n✨ Your bot is ready to deploy!"
         
         await generating_msg.edit_text(response, parse_mode="Markdown")
         
@@ -237,6 +281,7 @@ async def handle_customization(update: Update, context: ContextTypes.DEFAULT_TYP
         )
         
     except Exception as e:
+        logger.error(f"Generation failed: {e}")
         await generating_msg.edit_text(f"❌ Error generating bot: {str(e)[:200]}")
     
     return ConversationHandler.END
@@ -318,13 +363,13 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle errors"""
-    print(f'Update {update} caused error {context.error}')
+    logger.error(f'Update {update} caused error {context.error}')
 
 
 def main() -> None:
     """Start the bot"""
-    if not TELEGRAM_TOKEN or not ANTHROPIC_API_KEY:
-        raise ValueError("TELEGRAM_BOT_TOKEN and ANTHROPIC_API_KEY must be set in .env file")
+    logger.info("🚀 Starting Bot Factory...")
+    logger.info(f"Token loaded: {TELEGRAM_TOKEN[:20]}...")
     
     # Create application
     application = Application.builder().token(TELEGRAM_TOKEN).build()
@@ -335,6 +380,7 @@ def main() -> None:
         states={
             ASKING_BOT_TYPE: [
                 CommandHandler("start", start),
+                CallbackQueryHandler(handle_bot_type),
             ],
             ASKING_FEATURES: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, handle_features),
@@ -350,19 +396,17 @@ def main() -> None:
     application.add_handler(conv_handler)
     application.add_handler(CommandHandler("help", help_command))
     application.add_handler(CommandHandler("examples", examples_command))
-    application.add_handler(CommandHandler("start", start))
-    
-    # Add callback handler for buttons
-    application.add_handler(CommandHandler("start", start))
+    application.add_handler(CallbackQueryHandler(button_callback))
     application.add_error_handler(error_handler)
     
-    # Handle all callbacks
-    from telegram.ext import CallbackQueryHandler
-    application.add_handler(CallbackQueryHandler(button_callback))
-    
     # Start bot
-    print("🚀 Bot Factory is running...")
-    application.run_polling()
+    logger.info("✅ Bot Factory is running...")
+    print("\n" + "="*50)
+    print("🏭 BOT FACTORY IS LIVE!")
+    print("="*50)
+    print("Waiting for messages...\n")
+    
+    application.run_polling(allowed_updates=Update.ALL_TYPES)
 
 
 if __name__ == "__main__":
