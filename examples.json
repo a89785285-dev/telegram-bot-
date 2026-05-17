@@ -1,0 +1,117 @@
+{
+  "example_bots": [
+    {
+      "id": 1,
+      "name": "Trivia Master",
+      "type": "Gaming",
+      "description": "Daily trivia questions with difficulty levels",
+      "features": [
+        "Multiple categories",
+        "Difficulty selection",
+        "Score tracking",
+        "Leaderboard",
+        "Hints system"
+      ],
+      "estimated_lines": 400
+    },
+    {
+      "id": 2,
+      "name": "Language Tutor",
+      "type": "Educational",
+      "description": "Interactive language learning with exercises",
+      "features": [
+        "Vocabulary lessons",
+        "Grammar exercises",
+        "Pronunciation guide",
+        "Progress tracking",
+        "Spaced repetition"
+      ],
+      "estimated_lines": 600
+    },
+    {
+      "id": 3,
+      "name": "Task Manager",
+      "type": "Business",
+      "description": "Manage todos and tasks with reminders",
+      "features": [
+        "Task creation/editing",
+        "Categories",
+        "Due dates",
+        "Reminders",
+        "Priority levels",
+        "Database persistence"
+      ],
+      "estimated_lines": 500
+    },
+    {
+      "id": 4,
+      "name": "Code Review Bot",
+      "type": "AI Assistant",
+      "description": "Analyzes code and provides feedback",
+      "features": [
+        "Code analysis",
+        "Bug detection",
+        "Performance suggestions",
+        "Security review",
+        "Best practices"
+      ],
+      "estimated_lines": 800
+    },
+    {
+      "id": 5,
+      "name": "Image Art Generator",
+      "type": "Creative",
+      "description": "Generates AI art from descriptions",
+      "features": [
+        "Text-to-image generation",
+        "Style selection",
+        "Image enhancement",
+        "Gallery of creations",
+        "Sharing capabilities"
+      ],
+      "estimated_lines": 450
+    },
+    {
+      "id": 6,
+      "name": "Music Playlist Bot",
+      "type": "Music",
+      "description": "Create and manage playlists",
+      "features": [
+        "Playlist creation",
+        "Track search",
+        "Recommendations",
+        "Shuffle/shuffle",
+        "Sharing playlists"
+      ],
+      "estimated_lines": 550
+    },
+    {
+      "id": 7,
+      "name": "Analytics Dashboard",
+      "type": "Data",
+      "description": "Real-time data visualization and analytics",
+      "features": [
+        "Data collection",
+        "Charts generation",
+        "Statistics",
+        "Report generation",
+        "Data export"
+      ],
+      "estimated_lines": 700
+    },
+    {
+      "id": 8,
+      "name": "AI Chat Assistant",
+      "type": "AI Assistant",
+      "description": "Intelligent chat with context awareness",
+      "features": [
+        "Natural conversation",
+        "Context memory",
+        "Multiple personalities",
+        "Knowledge base",
+        "Learning capability"
+      ],
+      "estimated_lines": 650
+    }
+  ]
+}
